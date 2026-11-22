@@ -18,6 +18,7 @@ import sys
 import time
 import urllib.parse
 import urllib.request
+from collections import Counter
 from datetime import datetime, timedelta, timezone
 
 # ============================ KONFIGURACJA ============================
@@ -126,7 +127,20 @@ def fetch_yahoo_raw(symbol, interval):
         if h is None or l is None or c is None:
             continue
         bars.append({"t": int(t), "h": float(h), "l": float(l), "c": float(c)})
+    step = INTERVAL_SEC[interval]
+    if step < 86400 and bars:
+        # usuń "ucięte" punkty końca sesji (np. 22:59) – zostaw świece na regularnej siatce
+        grid = Counter(b["t"] % step for b in bars).most_common(1)[0][0]
+        bars = [b for b in bars if b["t"] % step == grid]
+        # usuń dane z weekendu (pt 17:00 – nd 17:00 czasu Nowego Jorku)
+        bars = [b for b in bars if not is_weekend_ny(b["t"])]
     return bars
+
+
+def is_weekend_ny(t):
+    d = datetime.fromtimestamp(t + ny_utc_offset_h(t) * 3600, timezone.utc)
+    wd, hr = d.weekday(), d.hour   # pon=0 ... nd=6
+    return (wd == 4 and hr >= 17) or wd == 5 or (wd == 6 and hr < 17)
 
 
 def only_closed(bars, step):
