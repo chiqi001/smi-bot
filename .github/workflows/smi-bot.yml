@@ -1,0 +1,37 @@
+name: SMI Bot
+
+on:
+  schedule:
+    - cron: "*/15 * * * *"   # co 15 minut (GitHub potrafi opóźnić start o kilka-kilkanaście minut)
+  workflow_dispatch:          # przycisk "Run workflow" do ręcznego testu
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Przywróć stan (żeby nie dublować powiadomień)
+        uses: actions/cache/restore@v4
+        with:
+          path: smi_state.json
+          key: smi-state-${{ github.run_id }}
+          restore-keys: smi-state-
+
+      - name: Sprawdź sygnały SMI
+        env:
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: python smi_bot.py
+
+      - name: Zapisz stan
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: smi_state.json
+          key: smi-state-${{ github.run_id }}
