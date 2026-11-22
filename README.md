@@ -26,7 +26,7 @@ Bot ma już wpisane instrumenty i interwały **H1 + H4**:
 | Nazwa | Symbol Yahoo | Co to jest |
 |---|---|---|
 | US100 | `NQ=F` | kontrakt futures na Nasdaq 100 |
-| GOLD | `GC=F` | złoto (futures) |
+| GOLD | `PAXGUSDT` (Binance) | złoto – PAXG notowany 1:1 do XAUUSD spot |
 | WTI | `CL=F` | ropa WTI (futures) |
 | NATGAS | `NG=F` | gaz ziemny (futures) |
 | USDJPY | `JPY=X` | forex |
@@ -34,6 +34,9 @@ Bot ma już wpisane instrumenty i interwały **H1 + H4**:
 | USDCHF | `CHF=X` | forex |
 | EURCHF | `EURCHF=X` | forex |
 | VIX | `^VIX` | indeks zmienności CBOE |
+| WHEAT | `ZW=F` | pszenica (futures CBOT) |
+| CORN | `ZC=F` | kukurydza (futures CBOT) |
+| COCOA | `CC=F` | kakao (futures ICE US) |
 
 Yahoo nie ma świec H4, więc bot składa je z H1. Pierwsza świeca dnia zaczyna się o 17:00 czasu nowojorskiego (23:00 w Polsce), tak jak na forexie u większości brokerów. Jeśli SMI na H4 nie zgadza się z Twoim wykresem, zmień `H4_ANCHOR_NY_HOUR` na górze pliku.
 
@@ -94,7 +97,8 @@ W trybie `--loop` bot sprawdza rynek kilkanaście sekund po zamknięciu każdej 
 
 ## Uwagi
 
-- **US100, GOLD, WTI i NATGAS to kontrakty futures z Yahoo**, a nie CFD Twojego brokera. Kształt wykresu jest prawie ten sam, ale ceny mogą się różnić o kilka punktów, a przy rolowaniu kontraktu (zwłaszcza NATGAS i WTI) nawet bardziej. Dlatego SMI może się minimalnie różnić od wykresu CFD.
+- **Aktualne ustawienie alertów:** tylko WEJŚCIE LONG (SMI przebija -75 w dół) i WEJŚCIE SHORT (SMI przebija +75 w górę), przy każdym przebiciu, niezależnie od otwartej pozycji. Trójkąty i zamknięcia są wyłączone (`ALERT_TRIANGLES`, `ALERT_EXITS`, `ENTRIES_IGNORE_POSITION` na górze `smi_bot.py`).
+- **US100, WTI, NATGAS, WHEAT, CORN i COCOA to kontrakty futures z Yahoo**, a nie CFD Twojego brokera. Kształt wykresu jest prawie ten sam, ale ceny mogą się różnić o kilka punktów, a przy rolowaniu kontraktu (zwłaszcza NATGAS i WTI) nawet bardziej. Dlatego SMI może się minimalnie różnić od wykresu CFD.
 - **Porównaj z TradingView.** Wartość SMI z `--status` powinna być taka sama lub bardzo zbliżona do tej z wykresu dla tego samego symbolu i interwału. Małe różnice mogą wynikać z innego źródła danych: Binance a inna giełda, Yahoo a dostawca TradingView.
 - Pozycja strategii (long/short/brak) jest liczona na historii świec pobranej przez bota. Może więc czasem różnić się od TradingView, który ma inny początek historii. Nie dotyczy to trójkątów.
 - Alert przychodzi zwykle 1–15 minut po zamknięciu świecy H1/H4. W GitHub Actions może dojść jeszcze opóźnienie po stronie GitHuba.
