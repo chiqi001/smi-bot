@@ -1,0 +1,27 @@
+name: Keepalive
+
+# GitHub wyłącza harmonogram po 60 dniach bez aktywności w repozytorium.
+# Ten workflow raz w miesiącu zapisuje datę w pliku .keepalive – nie wpływa na działanie bota.
+
+on:
+  schedule:
+    - cron: "17 6 1 * *"     # 1. dnia każdego miesiąca
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  keepalive:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Zapisz datę i wypchnij zmianę
+        run: |
+          date -u +"%Y-%m-%dT%H:%M:%SZ" > .keepalive
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .keepalive
+          git commit -m "keepalive $(date -u +%Y-%m-%d)"
+          git push
