@@ -69,6 +69,8 @@ ALERT_EXITS = False      # zamknięcie pozycji wg strategii
 # True  = alert przy KAŻDYM przebiciu -75 (LONG) / +75 (SHORT), niezależnie od pozycji
 # False = jak w strategii TradingView: wejście tylko, gdy nie ma otwartej pozycji
 ENTRIES_IGNORE_POSITION = True
+# True = przypominaj na każdej kolejnej zamkniętej świecy, dopóki SMI jest nadal < -75 / > 75
+ALERT_IN_ZONE = True
 
 # Telegram – wpisz tutaj albo ustaw jako zmienne środowiskowe
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN", "")      # token od @BotFather
@@ -150,8 +152,21 @@ def is_weekend_ny(t):
     return (wd == 4 and hr >= 17) or wd == 5 or (wd == 6 and hr < 17)
 
 
+def data_delay(source, symbol):
+    """Ile sekund po zamknięciu świecy dane są już pełne.
+    Yahoo podaje futures (=F) i indeksy (^) z ok. 10–15 min opóźnieniem."""
+    if source == "yahoo" and symbol.endswith("=F"):
+        return 11 * 60
+    if source == "yahoo" and symbol.startswith("^"):
+        return 16 * 60
+    return 45
+
+
+_delay = 0
+
+
 def only_closed(bars, step):
-    now = time.time()
+    now = time.time() - _delay
     return [b for b in bars if b["t"] + step <= now]
 
 
@@ -195,6 +210,8 @@ _cache = {}
 
 
 def fetch(source, symbol, interval):
+    global _delay
+    _delay = data_delay(source, symbol)
     if source == "binance":
         return fetch_binance(symbol, interval)
     if source == "binance_fx":
@@ -202,7 +219,7 @@ def fetch(source, symbol, interval):
         key = (source, symbol)
         if key not in _cache:
             _cache[key] = [x for x in fetch_binance(symbol, "1h") if not is_weekend_ny(x["t"])]
-        raw = _cache[key]
+        raw = only_closed(_cache[key], 3600)
         return resample_4h(raw) if interval == "4h" else raw
     if source != "yahoo":
         raise RuntimeError(f"Nieznane źródło: {source}")
@@ -283,10 +300,10 @@ def find_events(bars, smi):
             if s < LOWER and prev >= LOWER:
                 events.append((i, "green"))
         if ENTRIES_IGNORE_POSITION and prev is not None:
-            if s < LONG_ENTRY <= prev:
-                events.append((i, "long"))
-            if s > SHORT_ENTRY >= prev:
-                events.append((i, "short"))
+            if s < LONG_ENTRY:
+                events.append((i, "long" if prev >= LONG_ENTRY else "long_zone"))
+            if s > SHORT_ENTRY:
+                events.append((i, "short" if prev <= SHORT_ENTRY else "short_zone"))
         if pos == 0 and s < LONG_ENTRY:
             pending = 1
             if not ENTRIES_IGNORE_POSITION:
@@ -309,9 +326,23 @@ EVENT_TEXT = {
     "green":       ("🟩▲", "ZIELONY trójkąt (SMI < -65)", ALERT_TRIANGLES),
     "long":        ("🟢", "WEJŚCIE LONG (SMI < -75)", ALERT_ENTRIES),
     "short":       ("🔴", "WEJŚCIE SHORT (SMI > 75)", ALERT_ENTRIES),
+    "long_zone":   ("🟢", "LONG – SMI nadal < -75", ALERT_ENTRIES and ALERT_IN_ZONE),
+    "short_zone":  ("🔴", "SHORT – SMI nadal > 75", ALERT_ENTRIES and ALERT_IN_ZONE),
     "close_long":  ("✅", "ZAMKNIJ LONG (SMI > 60)", ALERT_EXITS),
     "close_short": ("✅", "ZAMKNIJ SHORT (SMI < -60)", ALERT_EXITS),
 }
+
+
+def zone_info(smi, i, kind):
+    """Która to z kolei świeca w strefie."""
+    if kind not in ("long", "long_zone", "short", "short_zone"):
+        return ""
+    inside = (lambda v: v is not None and v < LONG_ENTRY) if kind.startswith("long") \
+        else (lambda v: v is not None and v > SHORT_ENTRY)
+    n = 0
+    while i - n >= 0 and inside(smi[i - n]):
+        n += 1
+    return f"\nŚwieca w strefie: {n}."
 
 
 # ---------------------------- TELEGRAM ----------------------------
@@ -399,7 +430,8 @@ def check_all(status_only=False):
                     continue
                 notify(f"{emoji} {name} {interval.upper()} – {label}",
                        f"Świeca: {fmt_time(bars[i]['t'])} (PL)\n"
-                       f"Cena: {fmt_price(bars[i]['c'])} | SMI: {smi[i]:.2f}")
+                       f"Cena: {fmt_price(bars[i]['c'])} | SMI: {smi[i]:.2f}"
+                       + zone_info(smi, i, kind))
             state[key] = last_t
         time.sleep(0.5)  # grzecznie wobec Yahoo
     if not status_only:
@@ -419,20 +451,38 @@ def replay(day, send_all=False):
             smi = calc_smi(bars)
             events, _ = find_events(bars, smi)
             for i, kind in events:
-                if fmt_time(bars[i]["t"])[:10] == day and EVENT_TEXT[kind][2]:
-                    found.append((bars[i]["t"], name, interval, kind, bars[i]["c"], smi[i]))
+                if fmt_time(bars[i]["t"]).startswith(day) and EVENT_TEXT[kind][2]:
+                    found.append((bars[i]["t"], name, interval, kind, bars[i]["c"], smi[i],
+                                  zone_info(smi, i, kind)))
         time.sleep(0.5)
     found.sort()
     print(f"Sygnały z {day}: {len(found)}")
-    for t, name, interval, kind, c, v in found:
+    for t, name, interval, kind, c, v, z in found:
         print(f"  {fmt_time(t)} | {name} {interval} | {EVENT_TEXT[kind][1]} | cena {fmt_price(c)} | SMI {v:.2f}")
     if not found:
         notify("ℹ️ Historia", f"Brak sygnałów z dnia {day}.")
         return
-    for t, name, interval, kind, c, v in (found if send_all else found[-1:]):
+    for t, name, interval, kind, c, v, z in (found if send_all else found[-1:]):
         emoji, label, _ = EVENT_TEXT[kind]
         notify(f"{emoji} [HISTORIA] {name} {interval.upper()} – {label}",
-               f"Świeca: {fmt_time(t)} (PL)\nCena: {fmt_price(c)} | SMI: {v:.2f}")
+               f"Świeca: {fmt_time(t)} (PL)\nCena: {fmt_price(c)} | SMI: {v:.2f}" + z)
+
+
+def hourly():
+    """Tryb dla GitHub Actions: czeka na pełną godzinę i sprawdza zaraz po
+    zamknięciu świecy (forex/złoto ~1 min, futures ~11 min, VIX ~16 min)."""
+    now = time.time()
+    hour = math.floor(now / 3600) * 3600
+    if now - hour >= 30 * 60:          # start przed pełną godziną -> czekaj na nią
+        hour += 3600
+    for offset in (60, 11 * 60 + 20, 16 * 60 + 20):
+        wait = hour + offset - time.time()
+        if wait > 0:
+            time.sleep(wait)
+        elif offset != 16 * 60 + 20:
+            continue                    # spóźniony start – wystarczy ostatnie sprawdzenie
+        print(f"--- sprawdzenie {fmt_time(time.time())}")
+        check_all()
 
 
 def main():
@@ -442,6 +492,7 @@ def main():
     ap.add_argument("--test", action="store_true", help="wyślij testowe powiadomienie")
     ap.add_argument("--replay", metavar="RRRR-MM-DD", help="wyślij ostatni sygnał z danego dnia")
     ap.add_argument("--all", action="store_true", help="z --replay: wyślij wszystkie sygnały z dnia")
+    ap.add_argument("--hourly", action="store_true", help="tryb GitHub Actions: sprawdź zaraz po pełnej godzinie")
     a = ap.parse_args()
 
     for iv in INTERVALS:
@@ -455,6 +506,9 @@ def main():
         return
     if a.status:
         check_all(status_only=True)
+        return
+    if a.hourly:
+        hourly()
         return
     if not a.loop:
         check_all()

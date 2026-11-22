@@ -2,7 +2,8 @@ name: SMI Bot
 
 on:
   schedule:
-    - cron: "*/15 * * * *"   # co 15 minut (GitHub potrafi opóźnić start o kilka-kilkanaście minut)
+    - cron: "35 * * * *"     # start przed pełną godziną, bot czeka i sprawdza zaraz po zamknięciu świecy
+    - cron: "5 * * * *"      # zapas, gdyby GitHub opóźnił / pominął start
   workflow_dispatch:          # przycisk "Run workflow" do ręcznego testu
     inputs:
       test:
@@ -10,18 +11,22 @@ on:
         type: boolean
         default: true
       replay:
-        description: "Wyślij ostatni sygnał z dnia (RRRR-MM-DD), puste = nie"
+        description: "Sygnał z historii: dzień RRRR-MM-DD albo godzina RRRR-MM-DD GG:00 (czas PL); puste = nie"
         type: string
         default: ""
       replay_all:
-        description: "Z historii wyślij wszystkie sygnały z tego dnia"
+        description: "Z historii wyślij wszystkie pasujące sygnały (nie tylko ostatni)"
         type: boolean
         default: false
+
+concurrency:
+  group: smi-bot-${{ github.event_name }}
+  cancel-in-progress: false
 
 jobs:
   check:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 50
     steps:
       - uses: actions/checkout@v4
 
@@ -58,7 +63,12 @@ jobs:
         env:
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-        run: python smi_bot.py
+        run: |
+          if [ "${{ github.event_name }}" = "schedule" ]; then
+            python smi_bot.py --hourly
+          else
+            python smi_bot.py
+          fi
 
       - name: Zapisz stan
         if: always()
