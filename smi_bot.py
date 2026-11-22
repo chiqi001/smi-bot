@@ -28,6 +28,7 @@ from datetime import datetime, timedelta, timezone
 # to kontrakty futures – najbliższe CFD-kom typu US100 / GOLD / WTI u brokerów.
 SYMBOLS = [
     ("yahoo", "NQ=F",     "US100"),
+    ("yahoo", "ES=F",     "US500"),
     ("binance_fx", "PAXGUSDT", "GOLD"),   # PAXG = token złota 1:1 do XAUUSD spot
     ("yahoo", "CL=F",     "WTI"),
     ("yahoo", "NG=F",     "NATGAS"),
@@ -35,6 +36,9 @@ SYMBOLS = [
     ("yahoo", "GBPJPY=X", "GBPJPY"),
     ("yahoo", "CHF=X",    "USDCHF"),
     ("yahoo", "EURCHF=X", "EURCHF"),
+    ("yahoo", "GBPCHF=X", "GBPCHF"),
+    ("yahoo", "AUDCHF=X", "AUDCHF"),
+    ("yahoo", "EURUSD=X", "EURUSD"),
     ("yahoo", "^VIX",     "VIX"),
     ("yahoo", "ZW=F",     "WHEAT"),
     ("yahoo", "ZC=F",     "CORN"),
