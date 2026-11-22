@@ -385,16 +385,50 @@ def check_all(status_only=False):
         save_state(state)
 
 
+def replay(day, send_all=False):
+    """Wysyła sygnał(y) z danego dnia (data wg czasu polskiego, RRRR-MM-DD)."""
+    found = []
+    for source, symbol, name in SYMBOLS:
+        for interval in INTERVALS:
+            try:
+                bars = fetch(source, symbol, interval)
+            except Exception as e:
+                print(f"[{name} {interval}] błąd pobierania danych: {e}", file=sys.stderr)
+                continue
+            smi = calc_smi(bars)
+            events, _ = find_events(bars, smi)
+            for i, kind in events:
+                if fmt_time(bars[i]["t"])[:10] == day and EVENT_TEXT[kind][2]:
+                    found.append((bars[i]["t"], name, interval, kind, bars[i]["c"], smi[i]))
+        time.sleep(0.5)
+    found.sort()
+    print(f"Sygnały z {day}: {len(found)}")
+    for t, name, interval, kind, c, v in found:
+        print(f"  {fmt_time(t)} | {name} {interval} | {EVENT_TEXT[kind][1]} | cena {fmt_price(c)} | SMI {v:.2f}")
+    if not found:
+        notify("ℹ️ Historia", f"Brak sygnałów z dnia {day}.")
+        return
+    for t, name, interval, kind, c, v in (found if send_all else found[-1:]):
+        emoji, label, _ = EVENT_TEXT[kind]
+        notify(f"{emoji} [HISTORIA] {name} {interval.upper()} – {label}",
+               f"Świeca: {fmt_time(t)} (PL)\nCena: {fmt_price(c)} | SMI: {v:.2f}")
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--loop", action="store_true", help="działaj non stop")
     ap.add_argument("--status", action="store_true", help="pokaż aktualne SMI")
     ap.add_argument("--test", action="store_true", help="wyślij testowe powiadomienie")
+    ap.add_argument("--replay", metavar="RRRR-MM-DD", help="wyślij ostatni sygnał z danego dnia")
+    ap.add_argument("--all", action="store_true", help="z --replay: wyślij wszystkie sygnały z dnia")
     a = ap.parse_args()
 
     for iv in INTERVALS:
         if iv not in INTERVAL_SEC:
             sys.exit(f"Nieobsługiwany interwał: {iv}")
+    if a.replay:
+        replay(a.replay, a.all)
+        return
     if a.test:
         notify("✅ SMI Bot działa", "To jest testowe powiadomienie.")
         return

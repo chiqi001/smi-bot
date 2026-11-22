@@ -9,6 +9,14 @@ on:
         description: "Wyślij testową wiadomość na Telegram"
         type: boolean
         default: true
+      replay:
+        description: "Wyślij ostatni sygnał z dnia (RRRR-MM-DD), puste = nie"
+        type: string
+        default: ""
+      replay_all:
+        description: "Z historii wyślij wszystkie sygnały z tego dnia"
+        type: boolean
+        default: false
 
 jobs:
   check:
@@ -34,6 +42,14 @@ jobs:
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: python smi_bot.py --test
+
+      - name: Sygnały z historii
+        if: github.event_name == 'workflow_dispatch' && inputs.replay != ''
+        env:
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          REPLAY_DAY: ${{ inputs.replay }}
+        run: python smi_bot.py --replay "$REPLAY_DAY" ${{ inputs.replay_all && '--all' || '' }}
 
       - name: Aktualne SMI (do porównania z TradingView)
         run: python smi_bot.py --status
