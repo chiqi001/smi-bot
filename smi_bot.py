@@ -284,8 +284,8 @@ def find_events(bars, smi):
 
 
 EVENT_TEXT = {
-    "red":         ("🔺", "CZERWONY trójkąt (SMI > 65)", ALERT_TRIANGLES),
-    "green":       ("🔻", "ZIELONY trójkąt (SMI < -65)", ALERT_TRIANGLES),
+    "red":         ("🟥▼", "CZERWONY trójkąt (SMI > 65)", ALERT_TRIANGLES),
+    "green":       ("🟩▲", "ZIELONY trójkąt (SMI < -65)", ALERT_TRIANGLES),
     "long":        ("🟢", "WEJŚCIE LONG (SMI < -75)", ALERT_ENTRIES),
     "short":       ("🔴", "WEJŚCIE SHORT (SMI > 75)", ALERT_ENTRIES),
     "close_long":  ("✅", "ZAMKNIJ LONG (SMI > 60)", ALERT_EXITS),
