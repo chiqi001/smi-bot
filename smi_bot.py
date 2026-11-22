@@ -28,7 +28,7 @@ from datetime import datetime, timedelta, timezone
 # to kontrakty futures – najbliższe CFD-kom typu US100 / GOLD / WTI u brokerów.
 SYMBOLS = [
     ("yahoo", "NQ=F",     "US100"),
-    ("yahoo", "GC=F",     "GOLD"),
+    ("binance_fx", "PAXGUSDT", "GOLD"),   # PAXG = token złota 1:1 do XAUUSD spot
     ("yahoo", "CL=F",     "WTI"),
     ("yahoo", "NG=F",     "NATGAS"),
     ("yahoo", "JPY=X",    "USDJPY"),
@@ -36,6 +36,9 @@ SYMBOLS = [
     ("yahoo", "CHF=X",    "USDCHF"),
     ("yahoo", "EURCHF=X", "EURCHF"),
     ("yahoo", "^VIX",     "VIX"),
+    ("yahoo", "ZW=F",     "WHEAT"),
+    ("yahoo", "ZC=F",     "CORN"),
+    ("yahoo", "CC=F",     "COCOA"),
     # ("binance", "BTCUSDT", "BTCUSDT"),   # krypto, gdyby kiedyś było potrzebne
 ]
 
@@ -59,9 +62,13 @@ LONG_ENTRY, LONG_EXIT = -75, 60
 SHORT_ENTRY, SHORT_EXIT = 75, -60
 
 # Jakie powiadomienia wysyłać
-ALERT_TRIANGLES = True   # pierwszy czerwony / zielony trójkąt
-ALERT_ENTRIES = True     # wejście LONG / SHORT wg strategii
-ALERT_EXITS = True       # zamknięcie pozycji wg strategii
+ALERT_TRIANGLES = False  # pierwszy czerwony / zielony trójkąt
+ALERT_ENTRIES = True     # wejście LONG / SHORT
+ALERT_EXITS = False      # zamknięcie pozycji wg strategii
+
+# True  = alert przy KAŻDYM przebiciu -75 (LONG) / +75 (SHORT), niezależnie od pozycji
+# False = jak w strategii TradingView: wejście tylko, gdy nie ma otwartej pozycji
+ENTRIES_IGNORE_POSITION = True
 
 # Telegram – wpisz tutaj albo ustaw jako zmienne środowiskowe
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN", "")      # token od @BotFather
@@ -190,6 +197,13 @@ _cache = {}
 def fetch(source, symbol, interval):
     if source == "binance":
         return fetch_binance(symbol, interval)
+    if source == "binance_fx":
+        # dane 1h z Binance, bez weekendu (jak rynek spot), H4 składane jak na forexie
+        key = (source, symbol)
+        if key not in _cache:
+            _cache[key] = [x for x in fetch_binance(symbol, "1h") if not is_weekend_ny(x["t"])]
+        raw = _cache[key]
+        return resample_4h(raw) if interval == "4h" else raw
     if source != "yahoo":
         raise RuntimeError(f"Nieznane źródło: {source}")
     base = "1h" if interval == "4h" else interval
@@ -268,12 +282,19 @@ def find_events(bars, smi):
                 events.append((i, "red"))
             if s < LOWER and prev >= LOWER:
                 events.append((i, "green"))
+        if ENTRIES_IGNORE_POSITION and prev is not None:
+            if s < LONG_ENTRY <= prev:
+                events.append((i, "long"))
+            if s > SHORT_ENTRY >= prev:
+                events.append((i, "short"))
         if pos == 0 and s < LONG_ENTRY:
             pending = 1
-            events.append((i, "long"))
+            if not ENTRIES_IGNORE_POSITION:
+                events.append((i, "long"))
         elif pos == 0 and s > SHORT_ENTRY:
             pending = -1
-            events.append((i, "short"))
+            if not ENTRIES_IGNORE_POSITION:
+                events.append((i, "short"))
         elif pos > 0 and s > LONG_EXIT:
             pending = 0
             events.append((i, "close_long"))
