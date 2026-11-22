@@ -346,7 +346,7 @@ def zone_info(smi, i, kind):  # noqa
     n = 0
     while i - n >= 0 and inside(smi[i - n]):
         n += 1
-    return f" | w strefie: {n}. świeca" if kind.endswith("_zone") else ""
+    return ""  # licznik świec w strefie wyłączony
 
 
 # ---------------------------- TELEGRAM ----------------------------
