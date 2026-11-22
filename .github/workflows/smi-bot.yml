@@ -4,6 +4,11 @@ on:
   schedule:
     - cron: "*/15 * * * *"   # co 15 minut (GitHub potrafi opóźnić start o kilka-kilkanaście minut)
   workflow_dispatch:          # przycisk "Run workflow" do ręcznego testu
+    inputs:
+      test:
+        description: "Wyślij testową wiadomość na Telegram"
+        type: boolean
+        default: true
 
 jobs:
   check:
@@ -22,6 +27,13 @@ jobs:
           path: smi_state.json
           key: smi-state-${{ github.run_id }}
           restore-keys: smi-state-
+
+      - name: Testowa wiadomość
+        if: github.event_name == 'workflow_dispatch' && inputs.test
+        env:
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: python smi_bot.py --test
 
       - name: Aktualne SMI (do porównania z TradingView)
         run: python smi_bot.py --status
