@@ -333,7 +333,7 @@ EVENT_TEXT = {
 }
 
 
-def zone_info(smi, i, kind):
+def zone_info(smi, i, kind):  # noqa
     """Która to z kolei świeca w strefie."""
     if kind not in ("long", "long_zone", "short", "short_zone"):
         return ""
@@ -342,7 +342,7 @@ def zone_info(smi, i, kind):
     n = 0
     while i - n >= 0 and inside(smi[i - n]):
         n += 1
-    return f"\nŚwieca w strefie: {n}."
+    return f" | w strefie: {n}. świeca" if kind.endswith("_zone") else ""
 
 
 # ---------------------------- TELEGRAM ----------------------------
@@ -360,6 +360,28 @@ def notify(title, text):
         print(f"WYSŁANO: {title} | {text}")
     except Exception as e:
         print(f"[Telegram] błąd: {e} | {title}", file=sys.stderr)
+
+
+def send_batch(header, lines):
+    """Kilka sygnałów naraz -> jedna wiadomość (dzielona, gdyby przekroczyła limit Telegrama)."""
+    if not lines:
+        return
+    msg, chunks = header, []
+    for ln in lines:
+        if len(msg) + len(ln) + 2 > 3900:
+            chunks.append(msg)
+            msg = header + " (cd.)"
+        msg += "\n\n" + ln
+    chunks.append(msg)
+    for c in chunks:
+        title, _, text = c.partition("\n")
+        notify(title, text)
+
+
+def signal_line(t, name, interval, kind, c, v, z):
+    emoji, label, _ = EVENT_TEXT[kind]
+    return (f"{emoji} {name} {interval.upper()} – {label}\n"
+            f"Świeca {fmt_time(t)[11:]} | cena {fmt_price(c)} | SMI {v:.2f}{z}")
 
 
 def fmt_time(t):
@@ -399,6 +421,7 @@ def save_state(state):
 def check_all(status_only=False):
     _cache.clear()
     state = load_state()
+    alerts = []
     for source, symbol, name in SYMBOLS:
         for interval in INTERVALS:
             key = f"{source}:{symbol}:{interval}"
@@ -428,12 +451,15 @@ def check_all(status_only=False):
                 emoji, label, enabled = EVENT_TEXT[kind]
                 if not enabled:
                     continue
-                notify(f"{emoji} {name} {interval.upper()} – {label}",
-                       f"Świeca: {fmt_time(bars[i]['t'])} (PL)\n"
-                       f"Cena: {fmt_price(bars[i]['c'])} | SMI: {smi[i]:.2f}"
-                       + zone_info(smi, i, kind))
+                alerts.append((bars[i]["t"], name, interval, kind, bars[i]["c"], smi[i],
+                               zone_info(smi, i, kind)))
             state[key] = last_t
         time.sleep(0.5)  # grzecznie wobec Yahoo
+    if alerts:
+        alerts.sort(key=lambda a: (a[0], a[1]))
+        days = sorted({fmt_time(a[0])[:10] for a in alerts})
+        send_batch(f"🔔 Sygnały SMI – {', '.join(days)} (czas PL)",
+                   [signal_line(*a) for a in alerts])
     if not status_only:
         save_state(state)
 
@@ -455,27 +481,28 @@ def replay(day, send_all=False):
                     found.append((bars[i]["t"], name, interval, kind, bars[i]["c"], smi[i],
                                   zone_info(smi, i, kind)))
         time.sleep(0.5)
-    found.sort()
+    found.sort(key=lambda a: (a[0], a[1]))
     print(f"Sygnały z {day}: {len(found)}")
     for t, name, interval, kind, c, v, z in found:
         print(f"  {fmt_time(t)} | {name} {interval} | {EVENT_TEXT[kind][1]} | cena {fmt_price(c)} | SMI {v:.2f}")
     if not found:
         notify("ℹ️ Historia", f"Brak sygnałów z dnia {day}.")
         return
-    for t, name, interval, kind, c, v, z in (found if send_all else found[-1:]):
-        emoji, label, _ = EVENT_TEXT[kind]
-        notify(f"{emoji} [HISTORIA] {name} {interval.upper()} – {label}",
-               f"Świeca: {fmt_time(t)} (PL)\nCena: {fmt_price(c)} | SMI: {v:.2f}" + z)
+    chosen = found if send_all else found[-1:]
+    days = sorted({fmt_time(a[0])[:10] for a in chosen})
+    send_batch(f"📜 [HISTORIA] Sygnały SMI – {', '.join(days)} (czas PL)",
+               [signal_line(t, n, iv, k, c, v, z) for t, n, iv, k, c, v, z in chosen])
 
 
 def hourly():
     """Tryb dla GitHub Actions: czeka na pełną godzinę i sprawdza zaraz po
-    zamknięciu świecy (forex/złoto ~1 min, futures ~11 min, VIX ~16 min)."""
+    zamknięciu świecy: forex/złoto ~1 min, futures i VIX ~16 min (opóźnienie Yahoo).
+    Sygnały z jednego sprawdzenia przychodzą w jednej wiadomości."""
     now = time.time()
     hour = math.floor(now / 3600) * 3600
     if now - hour >= 30 * 60:          # start przed pełną godziną -> czekaj na nią
         hour += 3600
-    for offset in (60, 11 * 60 + 20, 16 * 60 + 20):
+    for offset in (60, 16 * 60 + 20):
         wait = hour + offset - time.time()
         if wait > 0:
             time.sleep(wait)
