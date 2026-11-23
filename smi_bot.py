@@ -62,7 +62,7 @@ LEN, R, SK = 14, 5, 3
 # Trójkąty
 UPPER, LOWER = 65, -65
 # Reguły strategii
-LONG_ENTRY, LONG_EXIT = -75, 60
+LONG_ENTRY, LONG_EXIT = -70, 60
 SHORT_ENTRY, SHORT_EXIT = 75, -60
 
 # Jakie powiadomienia wysyłać
