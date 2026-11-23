@@ -101,7 +101,7 @@ W trybie `--loop` bot sprawdza rynek kilkanaście sekund po zamknięciu każdej 
 
 ## Uwagi
 
-- **Aktualne ustawienie alertów:** tylko WEJŚCIE LONG (SMI przebija -75 w dół) i WEJŚCIE SHORT (SMI przebija +75 w górę), przy każdym przebiciu, niezależnie od otwartej pozycji. Trójkąty i zamknięcia są wyłączone (`ALERT_TRIANGLES`, `ALERT_EXITS`, `ENTRIES_IGNORE_POSITION` na górze `smi_bot.py`).
+- **Aktualne ustawienie alertów:** tylko WEJŚCIE LONG (SMI przebija -70 w dół) i WEJŚCIE SHORT (SMI przebija +70 w górę), przy każdym przebiciu, niezależnie od otwartej pozycji. Trójkąty i zamknięcia są wyłączone (`ALERT_TRIANGLES`, `ALERT_EXITS`, `ENTRIES_IGNORE_POSITION` na górze `smi_bot.py`).
 - **US100, US500, WTI, NATGAS, WHEAT, CORN i COCOA to kontrakty futures z Yahoo**, a nie CFD Twojego brokera. Kształt wykresu jest prawie ten sam, ale ceny mogą się różnić o kilka punktów, a przy rolowaniu kontraktu (zwłaszcza NATGAS i WTI) nawet bardziej. Dlatego SMI może się minimalnie różnić od wykresu CFD.
 - **Porównaj z TradingView.** Wartość SMI z `--status` powinna być taka sama lub bardzo zbliżona do tej z wykresu dla tego samego symbolu i interwału. Małe różnice mogą wynikać z innego źródła danych: Binance a inna giełda, Yahoo a dostawca TradingView.
 - Pozycja strategii (long/short/brak) jest liczona na historii świec pobranej przez bota. Może więc czasem różnić się od TradingView, który ma inny początek historii. Nie dotyczy to trójkątów.

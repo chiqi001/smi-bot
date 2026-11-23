@@ -63,17 +63,17 @@ LEN, R, SK = 14, 5, 3
 UPPER, LOWER = 65, -65
 # Reguły strategii
 LONG_ENTRY, LONG_EXIT = -70, 60
-SHORT_ENTRY, SHORT_EXIT = 75, -60
+SHORT_ENTRY, SHORT_EXIT = 70, -60
 
 # Jakie powiadomienia wysyłać
 ALERT_TRIANGLES = False  # pierwszy czerwony / zielony trójkąt
 ALERT_ENTRIES = True     # wejście LONG / SHORT
 ALERT_EXITS = False      # zamknięcie pozycji wg strategii
 
-# True  = alert przy KAŻDYM przebiciu -75 (LONG) / +75 (SHORT), niezależnie od pozycji
+# True  = alert przy KAŻDYM przebiciu -70 (LONG) / +70 (SHORT), niezależnie od pozycji
 # False = jak w strategii TradingView: wejście tylko, gdy nie ma otwartej pozycji
 ENTRIES_IGNORE_POSITION = True
-# True = przypominaj na każdej kolejnej zamkniętej świecy, dopóki SMI jest nadal < -75 / > 75
+# True = przypominaj na każdej kolejnej zamkniętej świecy, dopóki SMI jest nadal < -70 / > 70
 ALERT_IN_ZONE = True
 
 # Telegram – wpisz tutaj albo ustaw jako zmienne środowiskowe
@@ -328,10 +328,10 @@ def find_events(bars, smi):
 EVENT_TEXT = {
     "red":         ("🟥▼", "CZERWONY trójkąt (SMI > 65)", ALERT_TRIANGLES),
     "green":       ("🟩▲", "ZIELONY trójkąt (SMI < -65)", ALERT_TRIANGLES),
-    "long":        ("🟢", "WEJŚCIE LONG (SMI < -75)", ALERT_ENTRIES),
-    "short":       ("🔴", "WEJŚCIE SHORT (SMI > 75)", ALERT_ENTRIES),
-    "long_zone":   ("🟢", "LONG – SMI nadal < -75", ALERT_ENTRIES and ALERT_IN_ZONE),
-    "short_zone":  ("🔴", "SHORT – SMI nadal > 75", ALERT_ENTRIES and ALERT_IN_ZONE),
+    "long":        ("🟢", "WEJŚCIE LONG (SMI < -70)", ALERT_ENTRIES),
+    "short":       ("🔴", "WEJŚCIE SHORT (SMI > 70)", ALERT_ENTRIES),
+    "long_zone":   ("🟢", "LONG – SMI nadal < -70", ALERT_ENTRIES and ALERT_IN_ZONE),
+    "short_zone":  ("🔴", "SHORT – SMI nadal > 70", ALERT_ENTRIES and ALERT_IN_ZONE),
     "close_long":  ("✅", "ZAMKNIJ LONG (SMI > 60)", ALERT_EXITS),
     "close_short": ("✅", "ZAMKNIJ SHORT (SMI < -60)", ALERT_EXITS),
 }
