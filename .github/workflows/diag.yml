@@ -1,8 +1,0 @@
-name: diag
-on: workflow_dispatch
-jobs:
-  d:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - run: python smi_bot.py --replay "2026-11-27" --all
