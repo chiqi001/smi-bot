@@ -5,4 +5,4 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - run: python diag.py
+      - run: python smi_bot.py --replay "2026-11-27" --all

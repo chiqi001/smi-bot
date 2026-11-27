@@ -144,10 +144,44 @@ def fetch_yahoo_raw(symbol, interval):
     if step < 86400 and bars:
         # usuń "ucięte" punkty końca sesji (np. 22:59) – zostaw świece na regularnej siatce
         grid = Counter(b["t"] % step for b in bars).most_common(1)[0][0]
-        bars = [b for b in bars if b["t"] % step == grid]
+        kept, prev_t = [], None
+        for b in bars:
+            # odrzuć punkty spoza siatki oraz "końcówki sesji" (np. cena z chwili zamknięcia
+            # rynku zaraz po świecy :30) – to nie są pełne świece
+            if b["t"] % step == grid and (prev_t is None or b["t"] - prev_t >= step):
+                kept.append(b)
+            prev_t = b["t"]
+        bars = kept
         # usuń dane z weekendu (pt 17:00 – nd 17:00 czasu Nowego Jorku)
         bars = [b for b in bars if not is_weekend_ny(b["t"])]
     return bars
+
+
+def missing_hours(t0, t1):
+    """Ile pełnych godzin (poza weekendem) brakuje między dwiema świecami 1h."""
+    n, t = 0, t0 + 3600
+    while t < t1:
+        if not is_weekend_ny(t):
+            n += 1
+        t += 3600
+    return n
+
+
+def data_ok(bars_1h, until_t, lookback_h):
+    """Sprawdza, czy w ostatnich lookback_h godzinach przed until_t nie ma nietypowej
+    dziury w danych (święta, awarie Yahoo). Normalne przerwy danego rynku są uczone
+    z jego własnej historii (np. kakao ma codziennie kilkanaście godzin przerwy)."""
+    if len(bars_1h) < 50:
+        return True
+    gaps = [missing_hours(a["t"], b["t"]) for a, b in zip(bars_1h, bars_1h[1:])]
+    nz = sorted(g for g in gaps if g > 0)
+    normal = nz[int(len(nz) * 0.9)] if nz else 0
+    limit = max(normal + 4, int(normal * 1.5), 4)
+    start = until_t - lookback_h * 3600
+    for (a, b), g in zip(zip(bars_1h, bars_1h[1:]), gaps):
+        if b["t"] > start and a["t"] <= until_t and g > limit:
+            return False
+    return True
 
 
 def is_weekend_ny(t):
@@ -235,6 +269,18 @@ def fetch(source, symbol, interval):
     if interval == "4h":
         return resample_4h(only_closed(raw, 3600))
     return only_closed(raw, INTERVAL_SEC[interval])
+
+
+def bars_ok(source, symbol, interval, bar_t):
+    """Czy dane wokół tej świecy są kompletne (tylko Yahoo; Binance jest ciągły)."""
+    if source != "yahoo" or interval not in ("1h", "4h"):
+        return True
+    raw = _cache.get((symbol, "1h"))
+    if not raw:
+        return True
+    step = INTERVAL_SEC[interval]
+    # okno, z którego liczy się SMI (~25 świec) – dziura w nim przekłamuje wynik
+    return data_ok(raw, bar_t + step, 25 * step // 3600)
 
 
 # ---------------------------- SMI (1:1 z Pine) ----------------------------
@@ -455,6 +501,10 @@ def check_all(status_only=False):
                 emoji, label, enabled = EVENT_TEXT[kind]
                 if not enabled:
                     continue
+                if not bars_ok(source, symbol, interval, bars[i]["t"]):
+                    print(f"[{name} {interval}] pominięto sygnał {fmt_time(bars[i]['t'])} – "
+                          f"niepełne dane (święto / dziura w danych Yahoo)")
+                    continue
                 alerts.append((bars[i]["t"], name, interval, kind, bars[i]["c"], smi[i],
                                zone_info(smi, i, kind)))
             state[key] = last_t
@@ -481,7 +531,8 @@ def replay(day, send_all=False):
             smi = calc_smi(bars)
             events, _ = find_events(bars, smi)
             for i, kind in events:
-                if fmt_time(bars[i]["t"]).startswith(day) and EVENT_TEXT[kind][2]:
+                if fmt_time(bars[i]["t"]).startswith(day) and EVENT_TEXT[kind][2] \
+                        and bars_ok(source, symbol, interval, bars[i]["t"]):
                     found.append((bars[i]["t"], name, interval, kind, bars[i]["c"], smi[i],
                                   zone_info(smi, i, kind)))
         time.sleep(0.5)
